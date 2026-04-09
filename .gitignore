@@ -6,3 +6,7 @@ __pycache__/
 *.pyc
 *.swp
 *.swo
+values.sql
+values.db
+*.sql
+*.db
