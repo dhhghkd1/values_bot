@@ -15,6 +15,8 @@ dp = Dispatcher()
 
 user_data = {}
 
+line = "-"*10
+
 @dp.message(Command("start"))
 
 async def start(message: types.Message):
@@ -50,13 +52,28 @@ async def callback_handler(callback: types.CallbackQuery):
     res = requests.get(f"https://v6.exchangerate-api.com/v6/{value_key}/latest/{callback.data.upper()}")
     res_data = res.json()
 
+    base_curr = callback.data.upper()
+
     amount = user_data.get(callback.from_user.id)
 
     if res_data["result"] == "success":
 
         rates = res_data["conversion_rates"]
 
-        await callback.message.edit_text(f"IN USD : {amount*rates['USD']}\nIN EUR : {amount*rates['EUR']}\nIN UAH : {amount*rates['UAH']}\n IN RUB : {amount*rates['RUB']}")
+        text = f"{amount} {base_curr}\n{line}\n"
+
+        target_currencies = ['USD', 'EUR', 'UAH', 'RUB']
+
+        for curr in target_currencies:
+            if curr != base_curr:
+                res_val = round(amount * rates[curr], 2)
+                text += f" {curr}: {res_val}\n{line}\n"
+
+        await callback.message.edit_text(text,  parse_mode="Markdown")
+
+    await callback.answer()
+
+        #await callback.message.edit_text(f"IN USD : {amount*rates['USD']}\nIN EUR : {amount*rates['EUR']}\nIN UAH : {amount*rates['UAH']}\n IN RUB : {amount*rates['RUB']}")
 
 
 async def main():
