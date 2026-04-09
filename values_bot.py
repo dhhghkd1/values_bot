@@ -6,6 +6,7 @@ import asyncio
 import requests
 from dotenv import load_dotenv
 import json
+import sqlite3
 
 load_dotenv()
 
@@ -15,17 +16,103 @@ dp = Dispatcher()
 
 user_data = {}
 
+user_in_registration = []
+
+conn = sqlite3.connect('values.sql')
+cur = conn.cursor()
+cur.execute('CREATE TABLE IF NOT EXISTS values_us (id int auto_increment primary key, user_id varchar(50), currency varchar(50))')
+conn.commit()
+cur.close()
+conn.close()
+
 line = "-"*10
+
+@dp.message(Command("reset"))
+
+async def reset(message):
+
+    conn = sqlite3.connect('values.sql')
+    cur = conn.cursor()
+
+    cur.execute('DELETE FROM values_us WHERE user_id = ?', (str(message.from_user.id),))
+    conn.commit()
+
+    cur.close()
+
+    conn.close()
+
+
+    markup = types.ReplyKeyboardRemove()
+
+    await message.answer("data reset")
 
 @dp.message(Command("start"))
 
 async def start(message: types.Message):
 
-    await message.answer(f"hi {message.from_user.username} , in this bot u can convert almost all currencies , enter amount of currency : ")
+    user_in_registration.append(message.from_user.id)
+
+    conn = sqlite3.connect('values.sql')
+    cur = conn.cursor()
+
+    cur.execute('CREATE TABLE IF NOT EXISTS values_us (id int auto_increment primary key, user_id varchar(50), currency varchar(50))')
+    conn.commit()
+    cur.execute('SELECT currency FROM values_us WHERE user_id = ?',(message.from_user.id,))
+
+    user_data = cur.fetchone()
+
+
+    if user_data:
+
+        saved_currency = user_data[0]
+        await message.answer(f"you are registered ! your currency : {saved_currency.upper()}. \n")
+
+
+        if message.from_user.id in user_in_registration:
+            user_in_registration.remove(message.from_user.id)
+
+        cur.close()
+        conn.close()
+
+    else:
+
+        if message.from_user.id not in user_in_registration:
+            user_in_registration.append(message.from_user.id)
+
+        await message.answer(f"hi , {message.from_user.username} , to use this bot , enter your currency :")
+
 
 @dp.message(F.text)
 
 async def process_amount(message: types.Message):
+
+    user_id = message.from_user.id
+    text = message.text.strip().upper()
+
+    if user_id in user_in_registration:
+        res = requests.get(f"https://v6.exchangerate-api.com/v6/{value_key}/latest/{text}")
+        if res.status_code == 200:
+            conn = sqlite3.connect('values.sql')
+            cur = conn.cursor()
+            cur.execute('INSERT INTO values_us (user_id, currency) VALUES (?, ?)', (str(user_id), text))
+            conn.commit()
+            conn.close()
+            user_in_registration.remove(user_id)
+            await message.answer(f"you have been registered ! your currency is {text} .")
+        else:
+            await message.answer("wrong currency ! try again \n(for example : USD)")
+        return
+
+    conn = sqlite3.connect('values.sql')
+    cur = conn.cursor()
+    cur.execute('SELECT currency FROM values_us WHERE user_id = ?', (str(user_id),))
+    user_db_data = cur.fetchone()
+    cur.close()
+    conn.close()
+
+    if not user_db_data:
+        await message.answer("register firstly ! type /start")
+        return
 
     try:
         val = float(message.text.strip())
