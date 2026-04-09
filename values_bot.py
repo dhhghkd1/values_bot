@@ -2,6 +2,7 @@ import os
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from aiogram.utils.keyboard import InlineKeyboardBuilder
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 import asyncio
 import requests
 from dotenv import load_dotenv
@@ -26,6 +27,45 @@ cur.close()
 conn.close()
 
 line = "-"*10
+
+
+def get_main_menu_keyboard():
+    button = KeyboardButton(text="main menu")
+    markup = ReplyKeyboardMarkup(
+        keyboard=[[button]],
+        resize_keyboard=True
+    )
+    return markup
+
+@dp.message(F.text == "main menu")
+
+async def show_menu(message: types.Message):
+
+    conn = sqlite3.connect('values.sql')
+    cur = conn.cursor()
+    cur.execute('SELECT currency FROM values_us WHERE user_id = ?', (str(message.from_user.id),))
+    user_db_data = cur.fetchone()
+    cur.close()
+    conn.close()
+
+    if user_db_data:
+        curr = user_db_data[0]
+
+        res = requests.get(f"https://v6.exchangerate-api.com/v6/{value_key}/latest/{curr}").json()
+        rates = res["conversion_rates"]
+
+        header = f"1 {curr}\n{line}\n"
+        menu_text = header
+
+        target_currencies = ['USD', 'EUR', 'UAH', 'RUB']
+        for c in target_currencies:
+            if c != curr:
+                res_val = round(rates.get(c, 0), 2)
+                menu_text += f"{c} : {res_val}\n"
+
+        menu_text += f"{line}\nto convert any other currency, type the amount in chat"
+
+        await message.answer(menu_text, parse_mode="Markdown")
 
 @dp.message(Command("reset"))
 
@@ -59,13 +99,13 @@ async def start(message: types.Message):
     conn.commit()
     cur.execute('SELECT currency FROM values_us WHERE user_id = ?',(message.from_user.id,))
 
-    user_data = cur.fetchone()
+    db_res = cur.fetchone()
 
 
-    if user_data:
+    if db_res:
 
-        saved_currency = user_data[0]
-        await message.answer(f"you are registered ! your currency : {saved_currency.upper()}. \n")
+        saved_currency = db_res[0]
+        await message.answer(f"you are registered ! your currency : {saved_currency.upper()}. \n", reply_markup=get_main_menu_keyboard())
 
         if message.from_user.id in user_in_registration:
             user_in_registration.remove(message.from_user.id)
@@ -112,9 +152,9 @@ async def process_amount(message: types.Message):
 
             menu_text += f"{line}\nto convert any other currency , type the amount in chat"
 
-            await message.answer(menu_text, parse_mode="Markdown")
+            await message.answer(menu_text,reply_markup=get_main_menu_keyboard() ,parse_mode="Markdown")
         else:
-            await message.answer("wrong currency ! try again \n(for example : USD)")
+            await message.answer("wrong currency ! try again \n(for example : USD)",)
         return
 
     conn = sqlite3.connect('values.sql')
@@ -140,11 +180,11 @@ async def process_amount(message: types.Message):
         builder.add(types.InlineKeyboardButton(text='RUB', callback_data='rub'))
         builder.adjust(2)
 
-        await message.answer(f"your amount : {message.text} , choose currency pair to convert",reply_markup=builder.as_markup())
+        await message.answer(f"your amount : {message.text} , choose currency to convert",reply_markup=builder.as_markup())
 
     except Exception:
 
-        await message.answer("this is not number ! type amount ")
+        await message.answer("this is not number ! type amount ",reply_markup=get_main_menu_keyboard())
 
 @dp.callback_query()
 
@@ -156,6 +196,10 @@ async def callback_handler(callback: types.CallbackQuery):
     base_curr = callback.data.upper()
 
     amount = user_data.get(callback.from_user.id)
+
+    if amount is None:
+        await callback.answer("Enter amount again!", show_alert=True)
+        return
 
     if res_data["result"] == "success":
 
