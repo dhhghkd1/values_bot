@@ -67,7 +67,6 @@ async def start(message: types.Message):
         saved_currency = user_data[0]
         await message.answer(f"you are registered ! your currency : {saved_currency.upper()}. \n")
 
-
         if message.from_user.id in user_in_registration:
             user_in_registration.remove(message.from_user.id)
 
@@ -79,7 +78,7 @@ async def start(message: types.Message):
         if message.from_user.id not in user_in_registration:
             user_in_registration.append(message.from_user.id)
 
-        await message.answer(f"hi , {message.from_user.username} , to use this bot , enter your currency :")
+        await message.answer(f"hi , {message.from_user.username} , to use this bot , enter your currency : \n(preferred currency is USD) ")
 
 
 @dp.message(F.text)
@@ -99,6 +98,21 @@ async def process_amount(message: types.Message):
             conn.close()
             user_in_registration.remove(user_id)
             await message.answer(f"you have been registered ! your currency is {text} .")
+            res_data = res.json()
+            rates = res_data["conversion_rates"]
+
+            header = f"1 {text}\n{line}\n"
+            menu_text = header
+
+            target_currencies = ['USD', 'EUR', 'UAH', 'RUB']
+            for curr in target_currencies:
+                if curr != text:
+                    res_val = round(rates.get(curr, 0), 2)
+                    menu_text += f"{curr} : {res_val}\n"
+
+            menu_text += f"{line}\nto convert any other currency , type the amount in chat"
+
+            await message.answer(menu_text, parse_mode="Markdown")
         else:
             await message.answer("wrong currency ! try again \n(for example : USD)")
         return
@@ -130,7 +144,7 @@ async def process_amount(message: types.Message):
 
     except Exception:
 
-        await message.answer("this is not number")
+        await message.answer("this is not number ! type amount ")
 
 @dp.callback_query()
 
@@ -160,7 +174,6 @@ async def callback_handler(callback: types.CallbackQuery):
 
     await callback.answer()
 
-        #await callback.message.edit_text(f"IN USD : {amount*rates['USD']}\nIN EUR : {amount*rates['EUR']}\nIN UAH : {amount*rates['UAH']}\n IN RUB : {amount*rates['RUB']}")
 
 
 async def main():
